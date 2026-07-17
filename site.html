@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Questões</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+.hidden{
+    display:none;
+}
+.correta{
+    color: #10b981;
+    font-weight:bold;
+}
+.errada{
+    color: #ef4444;
+    font-weight:bold;
+}
+</style>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, setDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAsY1-xtDoVT6W05TKGP8Ml9c2_f9U_PjQ",
+    authDomain: "plataforma-de-questoes-2e4fa.firebaseapp.com",
+    projectId: "plataforma-de-questoes-2e4fa",
+    storageBucket: "plataforma-de-questoes-2e4fa.firebasestorage.app",
+    messagingSenderId: "937240982447",
+    appId: "1:937240982447:web:36949dd35fdd046f38b55a",
+    measurementId: "G-GJ5S33VGG6"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const firebaseDb = getFirestore(app);
+
+  // Expondo para o resto do sistema
+  window.firebaseDb = firebaseDb;
+  window.setDoc = setDoc;
+  window.deleteDoc = deleteDoc;
+  window.doc = doc;
+  window.getDocs = getDocs;
+  window.collection = collection;
+  window.onSnapshot = onSnapshot;
+</script>
+
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans">
+
+<nav class="bg-blue-800 text-white p-4 shadow-md sticky top-0 z-50">
+  <div class="max-w-6xl mx-auto flex justify-between items-center">
+    <h1 class="text-2xl font-bold tracking-tight">📚 Sistema de Questões</h1>
+  </div>
+</nav>
+
+<div class="min-h-screen bg-slate-50 py-8 px-4">
+<div class="max-w-2xl mx-auto">
+
+<div id="loginArea" class="bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
+    <h2 class="text-3xl font-bold text-slate-800 mb-6 text-center">Acesso ao Sistema</h2>
+    <div class="space-y-4">
+        <input type="text" id="nomeUsuario" placeholder="Usuário" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent">
+        <input type="password" id="senhaUsuario" placeholder="Senha" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent">
+        <button onclick="entrar()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">Entrar</button>
+    </div>
+
+    <div class="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <p class="text-sm text-slate-700">
+            <span class="font-bold text-blue-800">👨‍💼 Admin padrão:</span><br>
+            <span class="text-slate-600">Usuário: <strong>admin</strong></span><br>
+            <span class="text-slate-600">Senha: <strong>1234</strong></span>
+        </p>
+    </div>
+</div>
+
+<div id="sistema" class="hidden">
+    <div class="bg-white p-6 rounded-2xl shadow-lg border border-slate-200 mb-8">
+        <h2 id="usuarioLogado" class="text-2xl font-bold text-slate-800 mb-6 text-center"></h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <button onclick="iniciarProva()" class="bg-blue-600 text-white py-3 px-4 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg">🎯 Iniciar Prova</button>
+            <button id="btnCadastro" onclick="mostrarSecao('cadastro')" class="bg-green-600 text-white py-3 px-4 rounded-lg font-bold hover:bg-green-700 transition-colors shadow-md hover:shadow-lg">➕ Adicionar</button>
+            <button id="btnListaQuestoes" onclick="listarQuestoes()" class="bg-purple-600 text-white py-3 px-4 rounded-lg font-bold hover:bg-purple-700 transition-colors shadow-md hover:shadow-lg">📋 Questões</button>
+            <button id="btnUsuarios" onclick="listarUsuarios()" class="bg-indigo-600 text-white py-3 px-4 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg ring-2 ring-indigo-800">👥 Usuários</button>
+            <button onclick="sair()" class="col-span-2 md:col-span-1 bg-red-600 text-white py-3 px-4 rounded-lg font-bold hover:bg-red-700 transition-colors shadow-md hover:shadow-lg">🚪 Sair</button>
+        </div>
+    </div>
+
+    <div id="cadastro" class="hidden bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
+        <h2 class="text-2xl font-bold text-slate-800 mb-2">Adicionar Múltiplas Questões</h2>
+        <p class="text-slate-600 mb-4">Siga o padrão abaixo. A chave <strong>correta</strong> indica o índice da resposta certa (0 = primeira, 1 = segunda, etc). Você pode adicionar <strong>materia</strong> e <strong>banca</strong> para filtrar depois.</p>
+        <textarea id="textoPadrao" placeholder='[
+  {
+    "enunciado": "Qual é a capital de Sergipe?",
+    "alternativas": ["Salvador", "Aracaju", "Maceió", "Recife"],
+    "correta": 1,
+    "materia": "Geografia",
+    "banca": "Concursos Públicos",
+    "comentario": "Aracaju é a capital do estado de Sergipe."
+  }
+]' class="w-full h-80 font-mono text-sm px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"></textarea>
+        <button onclick="salvarQuestaoPadrao()" class="mt-4 w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition-colors">💾 Salvar Banco de Questões</button>
+    </div>
+
+    <div id="prova" class="hidden bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
+        <div class="mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <h3 class="font-bold text-slate-800 mb-3">🔎 Filtros da Prova</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2" for="filtroMateriaProva">Matéria</label>
+                    <select id="filtroMateriaProva" multiple size="4" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent">
+                        <option value="todos" selected>Todas matérias</option>
+                    </select>
+                    <p class="text-xs text-slate-500 mt-2">Segure Ctrl/Shift para selecionar várias matérias.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2" for="filtroBancaProva">Banca</label>
+                    <select id="filtroBancaProva" multiple size="4" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent">
+                        <option value="todos" selected>Todas bancas</option>
+                    </select>
+                    <p class="text-xs text-slate-500 mt-2">Segure Ctrl/Shift para selecionar várias bancas.</p>
+                </div>
+            </div>
+            <button onclick="recarregarProva()" class="mt-4 bg-blue-600 text-white px-5 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">🔄 Aplicar filtros</button>
+        </div>
+        <div id="questoesProva"></div>
+    </div>
+
+    <div id="listaQuestoes" class="hidden bg-white p-8 rounded-2xl shadow-lg border border-slate-200"></div>
+    <div id="listaUsuarios" class="hidden bg-white p-8 rounded-2xl shadow-lg border border-slate-200"></div>
+</div>
+
+</div>
+</div>
+
+<script>
+let db;
+let usuarioAtual = null;
+let adminLogado = false;
+
+let provaAtual = [];
+let indiceQuestaoAtual = 0;
+let questoesRespondidas = new Set();
+let todasAsQuestoes = [];
+let loteAtual = [];
+let respostasSelecionadas = {};
+let questoesConfirmadas = new Set();
+
+function getSelectedValues(select) {
+    if (!select) return [];
+    const values = Array.from(select.options).filter(option => option.selected).map(option => option.value);
+    if (values.includes("todos") && values.length > 1) {
+        return values.filter(value => value !== "todos");
+    }
+    return values;
+}
+
+const request = indexedDB.open("BancoQuestoesV2", 1);
+
+request.onupgradeneeded = function(e){
+    db = e.target.result;
+    if(!db.objectStoreNames.contains("questoes")){
+        db.createObjectStore("questoes",{ keyPath:"id", autoIncrement:true });
+    }
+    if(!db.objectStoreNames.contains("usuarios")){
+        db.createObjectStore("usuarios",{ keyPath:"nome" });
+    }
+};
+
+request.onsuccess = function(e){
+    db = e.target.result;
+    const tx = db.transaction("usuarios","readwrite");
+    const store = tx.objectStore("usuarios");
+
+    store.get("admin").onsuccess = function(ev){
+        if(!ev.target.result){
+            store.add({ nome:"admin", senha:"1234", admin:true, respondidas:[] });
+            sincronizarUsuarioComFirebase("admin", "1234", true); // Garante o admin na nuvem
+        }
+    };
+};
+
+// ==========================================
+// FUNÇÕES DE SINCRONIZAÇÃO FIREBASE
+// ==========================================
+
+async function sincronizarUsuarioComFirebase(nome, senha, isAdmin) {
+    if (!window.firebaseDb) return;
+    try {
+        const usuarioRef = window.doc(window.firebaseDb, "usuarios", nome);
+        await window.setDoc(usuarioRef, {
+            nome: nome,
+            senha: senha,
+            admin: isAdmin
+            // Não enviamos array vazio aqui para não sobrescrever o progresso se ele já existir lá
+        }, { merge: true });
+        console.log("✅ Usuário sincronizado no Firebase:", nome);
+    } catch (error) {
+        console.error("Erro ao sincronizar com Firebase:", error);
+    }
+}
+
+async function salvarProgressoUsuario(idQuestao) {
+    const tx = db.transaction("usuarios", "readwrite");
+    const store = tx.objectStore("usuarios");
+    
+    store.get(usuarioAtual).onsuccess = async function(e) {
+        let user = e.target.result;
+        if (!user) return;
+        
+        if (!user.respondidas) user.respondidas = [];
+        
+        if (!user.respondidas.includes(idQuestao)) {
+            user.respondidas.push(idQuestao);
+            store.put(user); // Salva no navegador local
+            
+            // Salva no Firebase
+            if (window.firebaseDb) {
+                try {
+                    const usuarioRef = window.doc(window.firebaseDb, "usuarios", user.nome);
+                    await window.setDoc(usuarioRef, { respondidas: user.respondidas }, { merge: true });
+                    console.log("☁️ Progresso salvo no Firebase!");
+                } catch (error) {
+                    console.error("Erro ao salvar progresso:", error);
+                }
+            }
+        }
+    };
+}
+
+async function sincronizarQuestaoComFirebase(questao) {
+    if (!window.firebaseDb) return;
+    try {
+        // Cria a coleção "questoes" e usa o ID da questão como nome do documento
+        const questaoRef = window.doc(window.firebaseDb, "questoes", questao.id.toString());
+        await window.setDoc(questaoRef, questao);
+        console.log("✅ Questão guardada no Firebase: ID", questao.id);
+    } catch (error) {
+        console.error("Erro ao sincronizar questão com Firebase:", error);
+    }
+}
+
+async function removerQuestaoDoFirebase(id) {
+    if (!window.firebaseDb) return;
+    try {
+        const questaoRef = window.doc(window.firebaseDb, "questoes", id.toString());
+        await window.deleteDoc(questaoRef);
+        console.log("🗑️ Questão removida do Firebase: ID", id);
+    } catch (error) {
+        console.error("Erro ao remover questão do Firebase:", error);
+    }
+}
+
+function entrar(){
+    const nome = document.getElementById("nomeUsuario").value.trim();
+    const senha = document.getElementById("senhaUsuario").value.trim();
+
+    if(!nome || !senha){
+        alert("Digite usuário e senha");
+        return;
+    }
+
+    const tx = db.transaction("usuarios","readwrite");
+    const store = tx.objectStore("usuarios");
+
+    store.get(nome).onsuccess = function(e){
+        let usuario = e.target.result;
+
+        if(!usuario){
+            alert("Usuário não encontrado. Peça para um administrador cadastrar o usuário.");
+            return;
+        }
+
+        if(usuario.senha !== senha){
+            alert("Senha incorreta");
+            return;
+        }
+
+        usuarioAtual = usuario.nome;
+        adminLogado = usuario.admin;
+
+        ativarSincronizacaoEmTempoReal();         // Para as questões
+        ativarSincronizacaoUsuariosEmTempoReal(); // Para os usuários
+
+        // Atualiza a lista local com o que ele já respondeu
+        questoesRespondidas = new Set(usuario.respondidas || []);
+
+        document.getElementById("loginArea").classList.add("hidden");
+        document.getElementById("sistema").classList.remove("hidden");
+        document.getElementById("usuarioLogado").innerText = "Usuário Logado: " + usuario.nome;
+
+        atualizarFiltrosProva();
+
+        if(!adminLogado){
+            document.getElementById("btnCadastro").style.display = "none";
+            document.getElementById("btnListaQuestoes").style.display = "none";
+            document.getElementById("btnUsuarios").style.display = "none";
+        }
+    };
+}
+
+function sair(){ location.reload(); }
+
+function ativarSincronizacaoUsuariosEmTempoReal() {
+    if (!window.firebaseDb) return;
+
+    const usuariosRef = window.collection(window.firebaseDb, "usuarios");
+
+    window.onSnapshot(usuariosRef, (snapshot) => {
+        const tx = db.transaction("usuarios", "readwrite");
+        const store = tx.objectStore("usuarios");
+
+        snapshot.docChanges().forEach((change) => {
+            const dadosUsuario = change.doc.data();
+            
+            if (change.type === "added" || change.type === "modified") {
+                // Atualiza o banco local com os dados da nuvem
+                store.put(dadosUsuario);
+                
+                // CRUCIAL: Se o dado que mudou for do usuário que está logado agora
+                if (usuarioAtual === dadosUsuario.nome) {
+                    // Atualiza a lista de questões respondidas na memória para a prova não repetir questões
+                    questoesRespondidas = new Set(dadosUsuario.respondidas || []);
+                    console.log("🔄 Seu progresso foi sincronizado da nuvem!");
+                }
+            }
+            if (change.type === "removed") {
+                store.delete(change.doc.id);
+            }
+        });
+
+        tx.oncomplete = function() {
+            // Atualiza a lista visual de usuários se o Admin estiver nela
+            if (!document.getElementById("listaUsuarios").classList.contains("hidden")) {
+                listarUsuarios();
+            }
+        };
+    });
+}
+
+function ativarSincronizacaoEmTempoReal() {
+    if (!window.firebaseDb) return;
+
+    const questaoRef = window.collection(window.firebaseDb, "questoes");
+
+    // O onSnapshot executa toda vez que um documento é adicionado, removido ou modificado
+    window.onSnapshot(questaoRef, (snapshot) => {
+        const tx = db.transaction("questoes", "readwrite");
+        const store = tx.objectStore("questoes");
+
+        snapshot.docChanges().forEach((change) => {
+            const dadosQuestao = change.doc.data();
+            
+            if (change.type === "added" || change.type === "modified") {
+                store.put(dadosQuestao); // Salva ou atualiza localmente
+                console.log("🚀 Questão atualizada via nuvem:", dadosQuestao.id);
+            }
+            if (change.type === "removed") {
+                store.delete(parseInt(change.doc.id)); // Remove localmente se for apagada na nuvem
+            }
+        });
+
+        tx.oncomplete = function() {
+            // Se a lista de questões estiver aberta, ela se atualiza sozinha
+            if (!document.getElementById("listaQuestoes").classList.contains("hidden")) {
+                listarQuestoes();
+            }
+        };
+    });
+}
+
+function mostrarSecao(secao){
+    document.getElementById("cadastro").classList.add("hidden");
+    document.getElementById("prova").classList.add("hidden");
+    document.getElementById("listaQuestoes").classList.add("hidden");
+    document.getElementById("listaUsuarios").classList.add("hidden");
+    document.getElementById(secao).classList.remove("hidden");
+}
+
+function listarUsuarios(){
+    mostrarSecao("listaUsuarios");
+    const area = document.getElementById("listaUsuarios");
+
+    area.innerHTML = `
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-slate-800">👥 Gerenciar Usuários</h2>
+        <button onclick="mostrarSecao('sistema')" class="bg-slate-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-slate-700 transition-colors">← Voltar</button>
+    </div>
+    
+    <div class="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-lg mb-6">
+        <h3 class="font-bold text-blue-900 mb-3">➕ Adicionar Novo Usuário</h3>
+        <div class="flex gap-3 flex-col md:flex-row">
+            <input type="text" id="novoUsuario" placeholder="Nome do usuário" class="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <input type="password" id="novaSenha" placeholder="Senha" class="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <button id="btnAdicionarUsuario" class="bg-green-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-700 transition-colors whitespace-nowrap">Adicionar</button>
+        </div>
+    </div>
+    <div id="usuariosLista"></div>
+    `;
+
+    document.getElementById("btnAdicionarUsuario").addEventListener("click", adicionarUsuario);
+
+    const lista = document.getElementById("usuariosLista");
+    const tx = db.transaction("usuarios","readonly");
+    const store = tx.objectStore("usuarios");
+
+    store.getAll().onsuccess = function(e){
+        const usuarios = e.target.result;
+        lista.innerHTML = "";
+
+        if(usuarios.length === 0){
+            lista.innerHTML = "<p class=\"text-slate-500 text-center py-8\">Nenhum usuário cadastrado.</p>";
+            return;
+        }
+
+        usuarios.forEach(usuario=>{
+            const div = document.createElement("div");
+            div.className = "border-2 border-slate-200 rounded-xl p-6 mb-4 bg-white hover:border-blue-400 transition-all shadow-sm";
+            const statusAdmin = usuario.admin ? '<span class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-semibold">🔐 Administrador</span>' : '<span class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold">👤 Usuário</span>';
+
+            const botoesHTML = `
+                <button class="bg-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-bold hover:bg-yellow-600 transition-colors text-sm" onclick="editarUsuario('${usuario.nome}')">✏️ Editar</button>
+                ${usuario.nome === "admin" ? '<span class="text-sm text-slate-500 italic ml-2">👑 Conta do administrador (não pode ser removida)</span>' : `<button class="bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-700 transition-colors text-sm" onclick="removerUsuario('${usuario.nome}')">🗑️ Remover</button>`}
+            `;
+
+            div.innerHTML = `
+            <div class="flex justify-between items-start mb-4">
+                <div class="flex-1">
+                    <h3 class="font-bold text-slate-800 text-lg">${usuario.nome}</h3>
+                    <p class="text-slate-600 text-sm mt-1">Status: ${statusAdmin}</p>
+                </div>
+            </div>
+            ${usuario.respondidas ? `<p class="text-sm text-slate-500 mb-4">📊 Questões respondidas: ${usuario.respondidas.length || 0}</p>` : ''}
+            <div class="flex gap-2 flex-wrap">${botoesHTML}</div>
+            `;
+            lista.appendChild(div);
+        });
+    };
+}
+
+function adicionarUsuario(){
+    const nome = document.getElementById("novoUsuario").value.trim();
+    const senha = document.getElementById("novaSenha").value.trim();
+
+    if(!nome || !senha){
+        alert("Preencha tudo");
+        return;
+    }
+
+    const tx = db.transaction("usuarios","readwrite");
+    const store = tx.objectStore("usuarios");
+
+    store.put({ nome:nome, senha:senha, admin:false, respondidas:[] });
+
+    tx.oncomplete = function(){
+        sincronizarUsuarioComFirebase(nome, senha, false); // Aciona o Firebase!
+        listarUsuarios();
+    };
+}
+
+function removerUsuario(nome){
+    if(nome === "admin") return;
+    if(!confirm(`⚠️ Tem certeza que deseja remover o usuário "${nome}"?\n\nEsta ação não pode ser desfeita.`)) return;
+
+    const tx = db.transaction(["usuarios"], "readwrite");
+    const store = tx.objectStore("usuarios");
+    store.delete(nome);
+
+    tx.oncomplete = function(){
+        // Remove também do firebase se houver conexão
+        if (window.firebaseDb) window.deleteDoc(window.doc(window.firebaseDb, "usuarios", nome));
+        listarUsuarios();
+    };
+}
+
+function editarUsuario(nome){
+    const tx = db.transaction("usuarios", "readwrite");
+    const store = tx.objectStore("usuarios");
+    store.get(nome).onsuccess = function(e){
+        const usuario = e.target.result;
+        if(!usuario) return;
+
+        const novoNome = prompt(`Digite o novo nome de usuário para ${nome}:`, usuario.nome || "");
+        if(novoNome === null) return;
+
+        const novoNomeTrim = novoNome.trim();
+        if(novoNomeTrim === "") {
+            alert("O nome de usuário não pode ficar vazio.");
+            return;
+        }
+
+        const novaSenha = prompt(`Digite a nova senha para ${novoNomeTrim} (deixe em branco para manter a atual):`, usuario.senha || "");
+        if(novaSenha === null) return;
+
+        const manterSenha = novaSenha.trim() === "";
+        if(!manterSenha) usuario.senha = novaSenha.trim();
+
+        const torneAdmin = confirm(`Manter ${novoNomeTrim} como administrador?\nOK = Sim, Cancelar = Não`);
+        usuario.admin = torneAdmin;
+
+        const salvarUsuario = () => {
+            const nomeAntigo = usuario.nome;
+            usuario.nome = novoNomeTrim;
+            store.put(usuario);
+            if (nomeAntigo !== novoNomeTrim) {
+                store.delete(nomeAntigo);
+            }
+        };
+
+        if (novoNomeTrim !== nome) {
+            store.get(novoNomeTrim).onsuccess = function(ev) {
+                if (ev.target.result) {
+                    alert(`Já existe um usuário com o nome "${novoNomeTrim}".`);
+                    return;
+                }
+                salvarUsuario();
+            };
+        } else {
+            salvarUsuario();
+        }
+
+        tx.oncomplete = function(){
+            sincronizarUsuarioComFirebase(usuario.nome, usuario.senha, usuario.admin);
+            listarUsuarios();
+        };
+    };
+}
+
+// ==========================================
+// GERENCIAMENTO DE QUESTÕES
+// ==========================================
+
+function salvarQuestaoPadrao() {
+    const texto = document.getElementById("textoPadrao").value.trim();
+    if (!texto) { alert("A área de texto está vazia."); return; }
+    
+    try {
+        const questoes = JSON.parse(texto);
+        const tx = db.transaction("questoes", "readwrite");
+        const store = tx.objectStore("questoes");
+
+        // Transforma num array caso seja apenas uma questão solta
+        const questoesArray = Array.isArray(questoes) ? questoes : [questoes];
+
+        questoesArray.forEach(q => {
+            const request = store.add(q);
+            request.onsuccess = function(e) {
+                q.id = e.target.result; // Pega no ID gerado localmente
+                sincronizarQuestaoComFirebase(q); // Envia a questão para a nuvem!
+            };
+        });
+
+        tx.oncomplete = function() {
+            alert("Questão(ões) salva(s) com sucesso!");
+            document.getElementById("textoPadrao").value = "";
+            atualizarFiltrosProva();
+            listarQuestoes(); // Atualiza a lista no ecrã
+        };
+    } catch (e) {
+        alert("Erro ao guardar! Certifique-se de usar o formato JSON sugerido.");
+    }
+}
+
+function listarQuestoes() {
+    mostrarSecao("listaQuestoes");
+    const area = document.getElementById("listaQuestoes");
+    area.innerHTML = `
+        <div class="flex flex-col gap-4 mb-6">
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-slate-700 mb-2" for="filtroMateria">Filtrar por Matéria</label>
+                    <select id="filtroMateria" multiple size="4" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent">
+                        <option value="todos">Todas matérias</option>
+                    </select>
+                    <p class="text-xs text-slate-500 mt-2">Segure Ctrl/Shift para selecionar várias matérias.</p>
+                </div>
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-slate-700 mb-2" for="filtroBanca">Filtrar por Banca</label>
+                    <select id="filtroBanca" multiple size="4" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent">
+                        <option value="todos">Todas bancas</option>
+                    </select>
+                    <p class="text-xs text-slate-500 mt-2">Segure Ctrl/Shift para selecionar várias bancas.</p>
+                </div>
+            </div>
+            <button onclick="aplicarFiltrosQuestoes()" class="mt-4 bg-blue-600 text-white px-5 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">🔄 Aplicar filtros</button>
+        </div>
+        <h2 class="text-2xl font-bold text-slate-800 mb-6">📋 Questões Cadastradas</h2>
+        <div id="questoesCadastradas"></div>
+    `;
+    const lista = document.getElementById("questoesCadastradas");
+
+    const tx = db.transaction("questoes", "readonly");
+    const store = tx.objectStore("questoes");
+
+    store.getAll().onsuccess = function(e) {
+        const questoes = e.target.result;
+        if (questoes.length === 0) {
+            lista.innerHTML = "<p class=\"text-slate-500 text-center py-8\">Nenhuma questão cadastrada no banco.</p>";
+            return;
+        }
+
+        const filtroMateriaEl = document.getElementById("filtroMateria");
+        const filtroBancaEl = document.getElementById("filtroBanca");
+        const filtroMateria = getSelectedValues(filtroMateriaEl);
+        const filtroBanca = getSelectedValues(filtroBancaEl);
+
+        const materias = [...new Set(questoes.map(q => q.materia || "Sem Matéria"))].sort();
+        const bancas = [...new Set(questoes.map(q => q.banca || "Sem Banca"))].sort();
+
+        filtroMateriaEl.innerHTML = `<option value="todos">Todas matérias</option>${materias.map(m => `<option value="${m}">${m}</option>`).join("")}`;
+        filtroBancaEl.innerHTML = `<option value="todos">Todas bancas</option>${bancas.map(b => `<option value="${b}">${b}</option>`).join("")}`;
+
+        const todosMat = filtroMateria.includes("todos") || filtroMateria.length === 0;
+        const todosBanc = filtroBanca.includes("todos") || filtroBanca.length === 0;
+
+        Array.from(filtroMateriaEl.options).forEach(opt => {
+            opt.selected = todosMat ? opt.value === "todos" : filtroMateria.includes(opt.value);
+        });
+        Array.from(filtroBancaEl.options).forEach(opt => {
+            opt.selected = todosBanc ? opt.value === "todos" : filtroBanca.includes(opt.value);
+        });
+
+        const questoesFiltradas = questoes.filter(q => {
+            const materiaValor = q.materia || "Sem Matéria";
+            const bancaValor = q.banca || "Sem Banca";
+            const materiasSelecionadas = filtroMateria.includes("todos") || filtroMateria.length === 0 ? materias : filtroMateria;
+            const bancasSelecionadas = filtroBanca.includes("todos") || filtroBanca.length === 0 ? bancas : filtroBanca;
+            return materiasSelecionadas.includes(materiaValor) && bancasSelecionadas.includes(bancaValor);
+        });
+
+        if (questoesFiltradas.length === 0) {
+            lista.innerHTML = "<p class=\"text-slate-500 text-center py-8\">Nenhuma questão encontrada para os filtros selecionados.</p>";
+            return;
+        }
+
+        questoesFiltradas.forEach(q => {
+            const div = document.createElement("div");
+            div.className = "border border-slate-200 rounded-xl p-6 mb-4 bg-slate-50";
+            div.innerHTML = `
+                <p class="font-bold text-slate-800 mb-3"><strong>Questão ID ${q.id}:</strong> ${q.enunciado}</p>
+                <p class="text-sm text-slate-600 mb-3"><strong>Matéria:</strong> ${q.materia || 'Não definida'} · <strong>Banca:</strong> ${q.banca || 'Não definida'}</p>
+                <ul class="space-y-2 mb-4">
+                    ${q.alternativas.map((alt, i) => `<li class="px-3 py-2 rounded-lg ${i === q.correta ? 'bg-emerald-100 text-emerald-800 font-semibold border border-emerald-300' : 'bg-white text-slate-700 border border-slate-200'}">
+                        <span class="font-bold">${String.fromCharCode(65+i)})</span> ${alt}
+                    </li>`).join('')}
+                </ul>
+                <p class="text-sm text-slate-600 bg-blue-50 border border-blue-200 p-3 rounded-lg mb-4"><strong>💡 Comentário:</strong> ${q.comentario || 'Sem comentário.'}</p>
+                <div class="flex flex-wrap gap-2">
+                    <button class="bg-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-bold hover:bg-yellow-600 transition-colors text-sm" onclick="editarQuestao(${q.id})">✏️ Editar</button>
+                    <button class="bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-700 transition-colors text-sm" onclick="removerQuestao(${q.id})">🗑️ Remover</button>
+                </div>
+            `;
+            lista.appendChild(div);
+        });
+    };
+}
+
+function aplicarFiltrosQuestoes() {
+    const lista = document.getElementById("questoesCadastradas");
+    const tx = db.transaction("questoes", "readonly");
+    const store = tx.objectStore("questoes");
+
+    store.getAll().onsuccess = function(e) {
+        const questoes = e.target.result;
+        if (questoes.length === 0) {
+            lista.innerHTML = "<p class=\"text-slate-500 text-center py-8\">Nenhuma questão cadastrada no banco.</p>";
+            return;
+        }
+
+        const filtroMateriaEl = document.getElementById("filtroMateria");
+        const filtroBancaEl = document.getElementById("filtroBanca");
+        const filtroMateria = getSelectedValues(filtroMateriaEl);
+        const filtroBanca = getSelectedValues(filtroBancaEl);
+
+        const questoesFiltradas = questoes.filter(q => {
+            const materiaValor = q.materia || "Sem Matéria";
+            const bancaValor = q.banca || "Sem Banca";
+            const materiasSelecionadas = filtroMateria.includes("todos") || filtroMateria.length === 0 ? [...new Set(questoes.map(q => q.materia || "Sem Matéria"))].sort() : filtroMateria;
+            const bancasSelecionadas = filtroBanca.includes("todos") || filtroBanca.length === 0 ? [...new Set(questoes.map(q => q.banca || "Sem Banca"))].sort() : filtroBanca;
+            return materiasSelecionadas.includes(materiaValor) && bancasSelecionadas.includes(bancaValor);
+        });
+
+        if (questoesFiltradas.length === 0) {
+            lista.innerHTML = "<p class=\"text-slate-500 text-center py-8\">Nenhuma questão encontrada para os filtros selecionados.</p>";
+            return;
+        }
+
+        lista.innerHTML = "";
+        questoesFiltradas.forEach(q => {
+            const div = document.createElement("div");
+            div.className = "border border-slate-200 rounded-xl p-6 mb-4 bg-slate-50";
+            div.innerHTML = `
+                <p class="font-bold text-slate-800 mb-3"><strong>Questão ID ${q.id}:</strong> ${q.enunciado}</p>
+                <p class="text-sm text-slate-600 mb-3"><strong>Matéria:</strong> ${q.materia || 'Não definida'} · <strong>Banca:</strong> ${q.banca || 'Não definida'}</p>
+                <ul class="space-y-2 mb-4">
+                    ${q.alternativas.map((alt, i) => `<li class="px-3 py-2 rounded-lg ${i === q.correta ? 'bg-emerald-100 text-emerald-800 font-semibold border border-emerald-300' : 'bg-white text-slate-700 border border-slate-200'}">
+                        <span class="font-bold">${String.fromCharCode(65+i)})</span> ${alt}
+                    </li>`).join('')}
+                </ul>
+                <p class="text-sm text-slate-600 bg-blue-50 border border-blue-200 p-3 rounded-lg mb-4"><strong>💡 Comentário:</strong> ${q.comentario || 'Sem comentário.'}</p>
+                <div class="flex flex-wrap gap-2">
+                    <button class="bg-yellow-500 text-slate-900 px-4 py-2 rounded-lg font-bold hover:bg-yellow-600 transition-colors text-sm" onclick="editarQuestao(${q.id})">✏️ Editar</button>
+                    <button class="bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-700 transition-colors text-sm" onclick="removerQuestao(${q.id})">🗑️ Remover</button>
+                </div>
+            `;
+            lista.appendChild(div);
+        });
+    };
+}
+
+function removerQuestao(id) {
+    if(!confirm("Deseja realmente remover esta questão?")) return;
+    
+    const tx = db.transaction("questoes", "readwrite");
+    tx.objectStore("questoes").delete(id);
+    
+    tx.oncomplete = function() { 
+        removerQuestaoDoFirebase(id); // Remove da nuvem
+        atualizarFiltrosProva();
+        listarQuestoes(); 
+    };
+}
+
+function editarQuestao(id) {
+    const tx = db.transaction("questoes", "readwrite");
+    const store = tx.objectStore("questoes");
+    store.get(id).onsuccess = function(e) {
+        const q = e.target.result;
+        if(!q) return;
+
+        const enunciado = prompt("Enunciado:", q.enunciado || "");
+        if(enunciado === null) return;
+
+        const alternativas = prompt("Digite as alternativas separadas por |:", (q.alternativas || []).join(" | "));
+        if(alternativas === null) return;
+
+        const correta = prompt("Índice da alternativa correta (0 = 1ª):", q.correta ?? "0");
+        if(correta === null) return;
+
+        const comentario = prompt("Comentário:", q.comentario || "");
+        if(comentario === null) return;
+
+        const materia = prompt("Matéria:", q.materia || "");
+        if(materia === null) return;
+
+        const banca = prompt("Banca:", q.banca || "");
+        if(banca === null) return;
+
+        q.enunciado = enunciado.trim() || q.enunciado;
+        q.alternativas = alternativas.split("|").map(item => item.trim()).filter(Boolean);
+        q.correta = isNaN(parseInt(correta, 10)) ? q.correta : parseInt(correta, 10);
+        q.comentario = comentario.trim();
+        q.materia = materia.trim();
+        q.banca = banca.trim();
+
+        store.put(q);
+        tx.oncomplete = function() {
+            sincronizarQuestaoComFirebase(q);
+            atualizarFiltrosProva();
+            listarQuestoes();
+        };
+    };
+}
+
+function atualizarFiltrosProva() {
+    const tx = db.transaction("questoes", "readonly");
+    const store = tx.objectStore("questoes");
+
+    store.getAll().onsuccess = function(e) {
+        const questoes = e.target.result || [];
+        const materias = [...new Set(questoes.map(q => q.materia || "Sem Matéria"))].sort();
+        const bancas = [...new Set(questoes.map(q => q.banca || "Sem Banca"))].sort();
+
+        const materiaEl = document.getElementById("filtroMateriaProva");
+        const bancaEl = document.getElementById("filtroBancaProva");
+        const selectedMaterias = getSelectedValues(materiaEl);
+        const selectedBancas = getSelectedValues(bancaEl);
+
+        if (materiaEl) {
+            materiaEl.innerHTML = `<option value="todos">Todas matérias</option>${materias.map(m => `<option value="${m}">${m}</option>`).join("")}`;
+            const todosMat = selectedMaterias.includes("todos") || selectedMaterias.length === 0;
+            Array.from(materiaEl.options).forEach(opt => {
+                opt.selected = todosMat ? opt.value === "todos" : selectedMaterias.includes(opt.value);
+            });
+        }
+        if (bancaEl) {
+            bancaEl.innerHTML = `<option value="todos">Todas bancas</option>${bancas.map(b => `<option value="${b}">${b}</option>`).join("")}`;
+            const todosBanc = selectedBancas.includes("todos") || selectedBancas.length === 0;
+            Array.from(bancaEl.options).forEach(opt => {
+                opt.selected = todosBanc ? opt.value === "todos" : selectedBancas.includes(opt.value);
+            });
+        }
+    };
+}
+
+// ==========================================
+// LÓGICA DA PROVA
+// ==========================================
+
+function iniciarProva() {
+    mostrarSecao("prova");
+    atualizarFiltrosProva();
+    const tx = db.transaction("questoes", "readonly");
+    const store = tx.objectStore("questoes");
+
+    store.getAll().onsuccess = function(e) {
+        todasAsQuestoes = e.target.result;
+        respostasSelecionadas = {};
+        questoesConfirmadas.clear();
+        indiceQuestaoAtual = 0;
+        recarregarProva();
+    };
+}
+
+function recarregarProva() {
+    const filtroMateria = getSelectedValues(document.getElementById("filtroMateriaProva"));
+    const filtroBanca = getSelectedValues(document.getElementById("filtroBancaProva"));
+
+    loteAtual = todasAsQuestoes.filter(q => {
+        const materiaValor = q.materia || "Sem Matéria";
+        const bancaValor = q.banca || "Sem Banca";
+        const materiaOk = filtroMateria.length === 0 || filtroMateria.includes("todos") || filtroMateria.includes(materiaValor);
+        const bancaOk = filtroBanca.length === 0 || filtroBanca.includes("todos") || filtroBanca.includes(bancaValor);
+        return materiaOk && bancaOk;
+    }).sort(() => Math.random() - 0.5).slice(0, 10);
+
+    indiceQuestaoAtual = 0;
+    if (loteAtual.length === 0) {
+        document.getElementById("questoesProva").innerHTML = "<p>Não há questões disponíveis para os filtros selecionados.</p>";
+        return;
+    }
+    renderizarQuestao();
+}
+
+function carregarProximoLote() {
+    const filtroMateria = getSelectedValues(document.getElementById("filtroMateriaProva"));
+    const filtroBanca = getSelectedValues(document.getElementById("filtroBancaProva"));
+
+    let questoesDisponiveis = todasAsQuestoes.filter(q => {
+        const materiaValor = q.materia || "Sem Matéria";
+        const bancaValor = q.banca || "Sem Banca";
+        const materiaOk = filtroMateria.length === 0 || filtroMateria.includes("todos") || filtroMateria.includes(materiaValor);
+        const bancaOk = filtroBanca.length === 0 || filtroBanca.includes("todos") || filtroBanca.includes(bancaValor);
+        return materiaOk && bancaOk && !questoesRespondidas.has(q.id);
+    });
+
+    if (questoesDisponiveis.length === 0) {
+        questoesRespondidas.clear();
+        questoesDisponiveis = todasAsQuestoes.filter(q => {
+            const materiaValor = q.materia || "Sem Matéria";
+            const bancaValor = q.banca || "Sem Banca";
+            const materiaOk = filtroMateria.length === 0 || filtroMateria.includes("todos") || filtroMateria.includes(materiaValor);
+            const bancaOk = filtroBanca.length === 0 || filtroBanca.includes("todos") || filtroBanca.includes(bancaValor);
+            return materiaOk && bancaOk;
+        });
+    }
+
+    const questoesEmbaralhadas = questoesDisponiveis.sort(() => Math.random() - 0.5);
+    loteAtual = questoesEmbaralhadas.slice(0, 10);
+    indiceQuestaoAtual = 0;
+    renderizarQuestao();
+}
+
+function renderizarQuestaoOld() {
+    const area = document.getElementById("questoesProva");
+    if (indiceQuestaoAtual >= loteAtual.length) {
+        const questoesRestantes = todasAsQuestoes.filter(q => !questoesRespondidas.has(q.id)).length;
+        if (questoesRestantes > 0) {
+            area.innerHTML = `
+                <div class="text-center">
+                    <h3 class="text-3xl font-bold text-slate-800 mb-2">✅ Lote Finalizado!</h3>
+                    <div class="flex gap-4 justify-center mt-6">
+                        <button onclick="carregarProximoLote()" class="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors\">Próximas 10 ➔</button>
+                        <button onclick="voltarAoMenu()" class="bg-slate-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-slate-700 transition-colors\">Voltar ao Menu</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            area.innerHTML = `
+                <div class="text-center p-8">
+                    <h3 class="text-3xl font-bold text-emerald-700 mb-2\">🎉 Prova Finalizada!</h3>
+                    <button onclick="voltarAoMenu()" class="mt-6 bg-slate-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-slate-700 transition-colors\">Voltar ao Menu</button>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    const q = loteAtual[indiceQuestaoAtual];
+    let html = `
+        <div class="border-b-2 border-blue-600 pb-4 mb-6\">
+            <p class="text-slate-500 text-sm mb-2\">Questão do Lote: ${indiceQuestaoAtual + 1}</p>
+            <h2 class="text-xl font-bold text-slate-800\">${q.enunciado}</h2>
+        </div>
+        <div class="space-y-3 mb-8\">
+    `;
+
+    q.alternativas.forEach((alt, i) => {
+        html += `
+            <label class="flex items-start gap-4 p-4 rounded-xl border-2 border-slate-200 bg-white cursor-pointer hover:bg-blue-50\">
+                <input type="radio" name="opcaoQuestao" value="${i}" class="mt-1\">
+                <div class="flex-1\"><span class="font-bold text-slate-800\">${String.fromCharCode(65 + i)}</span> ${alt}</div>
+            </label>
+        `;
+    });
+
+    html += `
+        </div>
+        <div class="flex gap-3 mb-6\">
+            <button id="btnConfirmarResposta" onclick="responderQuestao()" class="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors\">✅ Confirmar Resposta</button>
+        </div>
+        <div id="feedbackQuestao\"></div>
+    `;
+    area.innerHTML = html;
+}
+
+function responderQuestaoOld() {
+    const opcaoSelecionada = document.querySelector('input[name="opcaoQuestao"]:checked');
+    if (!opcaoSelecionada) { alert("Selecione uma alternativa."); return; }
+
+    const respostaUsuario = parseInt(opcaoSelecionada.value);
+    const feedback = document.getElementById("feedbackQuestao");
+    const q = loteAtual[indiceQuestaoAtual];
+    
+    // REGISTRA NO FIREBASE E LOCALMENTE
+    questoesRespondidas.add(q.id);
+    salvarProgressoUsuario(q.id);
+
+    document.querySelectorAll('input[name="opcaoQuestao"]').forEach(r => r.disabled = true);
+    document.getElementById("btnConfirmarResposta").style.display = "none";
+
+    if (respostaUsuario === q.correta) {
+        feedback.innerHTML = `<h3 class="correta text-xl font-bold text-emerald-600 bg-emerald-50 p-4 rounded-lg mb-4\">✅ Resposta Correta!</h3>`;
+    } else {
+        feedback.innerHTML = `
+            <div class="bg-red-50 border border-red-300 rounded-lg p-4 mb-4\">
+                <h3 class="errada text-xl font-bold text-red-600 mb-2\">❌ Incorreta.</h3> 
+                <p class="text-red-700\">Correta: <strong class="text-lg\">${q.alternativas[q.correta]}</strong>.</p>
+            </div>
+        `;
+    }
+    feedback.innerHTML += `
+        <div class="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-lg mb-6\">
+            <p class="text-slate-700">${q.comentario}</p>
+        </div>
+        <button onclick="proximaQuestao()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold">Próxima Questão ➔</button>
+    `;
+}
+
+function renderizarQuestao() {
+    const area = document.getElementById("questoesProva");
+    if (loteAtual.length === 0) {
+        area.innerHTML = "<p>Não há questões carregadas. Ajuste os filtros e recarregue a prova.</p>";
+        return;
+    }
+
+    if (indiceQuestaoAtual < 0) indiceQuestaoAtual = 0;
+    if (indiceQuestaoAtual > loteAtual.length) indiceQuestaoAtual = loteAtual.length;
+
+    if (indiceQuestaoAtual >= loteAtual.length) {
+        const questoesRestantes = todasAsQuestoes.filter(q => !questoesRespondidas.has(q.id)).length;
+        if (questoesRestantes > 0) {
+            area.innerHTML = `
+                <div class="text-center">
+                    <h3 class="text-3xl font-bold text-slate-800 mb-2">✅ Lote Finalizado!</h3>
+                    <div class="flex gap-4 justify-center mt-6">
+                        <button onclick="carregarProximoLote()" class="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">Próximas 10 ➔</button>
+                        <button onclick="voltarAoMenu()" class="bg-slate-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-slate-700 transition-colors">Voltar ao Menu</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            area.innerHTML = `
+                <div class="text-center p-8">
+                    <h3 class="text-3xl font-bold text-emerald-700 mb-2">🎉 Prova Finalizada!</h3>
+                    <button onclick="voltarAoMenu()" class="mt-6 bg-slate-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-slate-700 transition-colors">Voltar ao Menu</button>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    const q = loteAtual[indiceQuestaoAtual];
+    const selecionada = respostasSelecionadas[q.id];
+    const confirmada = questoesConfirmadas.has(q.id);
+
+    let html = `
+        <div class="border-b-2 border-blue-600 pb-4 mb-6">
+            <p class="text-slate-500 text-sm mb-2">Questão do Lote: ${indiceQuestaoAtual + 1} de ${loteAtual.length}</p>
+            <h2 class="text-xl font-bold text-slate-800">${q.enunciado}</h2>
+        </div>
+        <div class="space-y-3 mb-8">
+    `;
+
+    q.alternativas.forEach((alt, i) => {
+        const checked = selecionada === i ? "checked" : "";
+        const disabled = confirmada ? "disabled" : "";
+        html += `
+            <label class="flex items-start gap-4 p-4 rounded-xl border-2 border-slate-200 bg-white cursor-pointer hover:bg-blue-50">
+                <input type="radio" name="opcaoQuestao" value="${i}" class="mt-1" ${checked} ${disabled}>
+                <div class="flex-1"><span class="font-bold text-slate-800">${String.fromCharCode(65 + i)})</span> ${alt}</div>
+            </label>
+        `;
+    });
+
+    html += `
+        </div>
+        <div class="flex flex-col gap-3 mb-6 sm:flex-row">
+            <button onclick="anteriorQuestao()" ${indiceQuestaoAtual === 0 ? "disabled" : ""} class="flex-1 bg-slate-500 text-white py-3 rounded-lg font-bold hover:bg-slate-600 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed">⬅️ Anterior</button>
+            ${confirmada ? "" : `<button id="btnConfirmarResposta" onclick="responderQuestao()" class="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">✅ Confirmar Resposta</button>`}
+            <button onclick="proximaQuestao()" class="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">${indiceQuestaoAtual === loteAtual.length - 1 ? "Finalizar lote" : "Próximo ➔"}</button>
+        </div>
+        <div id="feedbackQuestao"></div>
+    `;
+    area.innerHTML = html;
+
+    if (confirmada) {
+        const feedback = document.getElementById("feedbackQuestao");
+        const isCorreta = selecionada === q.correta;
+        feedback.innerHTML = isCorreta
+            ? `<h3 class="text-xl font-bold text-emerald-600 bg-emerald-50 p-4 rounded-lg mb-4">✅ Resposta confirmada: correta.</h3>`
+            : `<div class="bg-red-50 border border-red-300 rounded-lg p-4 mb-4"><h3 class="text-xl font-bold text-red-600 mb-2">❌ Resposta confirmada: incorreta.</h3><p class="text-red-700">Correta: <strong class="text-lg">${String.fromCharCode(65 + q.correta)}) ${q.alternativas[q.correta]}</strong>.</p></div>`;
+        feedback.innerHTML += `
+            <div class="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-lg mb-6"><p class="text-slate-700">${q.comentario}</p></div>
+        `;
+        document.querySelectorAll('input[name="opcaoQuestao"]').forEach(r => r.disabled = true);
+    }
+}
+
+function responderQuestao() {
+    const opcaoSelecionada = document.querySelector('input[name="opcaoQuestao"]:checked');
+    if (!opcaoSelecionada) { alert("Selecione uma alternativa."); return; }
+
+    const respostaUsuario = parseInt(opcaoSelecionada.value, 10);
+    const feedback = document.getElementById("feedbackQuestao");
+    const q = loteAtual[indiceQuestaoAtual];
+
+    respostasSelecionadas[q.id] = respostaUsuario;
+    questoesConfirmadas.add(q.id);
+    questoesRespondidas.add(q.id);
+    salvarProgressoUsuario(q.id);
+
+    document.querySelectorAll('input[name="opcaoQuestao"]').forEach(r => r.disabled = true);
+    const btnConfirmar = document.getElementById("btnConfirmarResposta");
+    if (btnConfirmar) btnConfirmar.style.display = "none";
+
+    if (respostaUsuario === q.correta) {
+        feedback.innerHTML = `<h3 class="text-xl font-bold text-emerald-600 bg-emerald-50 p-4 rounded-lg mb-4">✅ Resposta Correta!</h3>`;
+    } else {
+        feedback.innerHTML = `
+            <div class="bg-red-50 border border-red-300 rounded-lg p-4 mb-4">
+                <h3 class="text-xl font-bold text-red-600 mb-2">❌ Incorreta.</h3>
+                <p class="text-red-700">Correta: <strong class="text-lg">${String.fromCharCode(65 + q.correta)}) ${q.alternativas[q.correta]}</strong>.</p>
+            </div>
+        `;
+    }
+    feedback.innerHTML += `
+        <div class="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-lg mb-6">
+            <p class="text-slate-700">${q.comentario}</p>
+        </div>
+    `;
+}
+
+function proximaQuestao() {
+    indiceQuestaoAtual++;
+    renderizarQuestao();
+}
+
+function anteriorQuestao() {
+    if (indiceQuestaoAtual > 0) {
+        indiceQuestaoAtual--;
+        renderizarQuestao();
+    }
+}
+
+function voltarAoMenu() {
+    mostrarSecao("sistema");
+    loteAtual = [];
+    indiceQuestaoAtual = 0;
+}
+</script>
+</body>
+</html>
